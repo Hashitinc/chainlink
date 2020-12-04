@@ -91,6 +91,21 @@ func TestArtifactCompilerVersionMatchesConfig(t *testing.T) {
 	require.NoError(t, scanner.Err())
 }
 
+// rootDir is the local chainlink root working directory
+var rootDir string
+
+func init() { // compute rootDir
+	var err error
+	thisDir, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+	rootDir, err = filepath.Abs(filepath.Join(thisDir, "../../.."))
+	if err != nil {
+		panic(err)
+	}
+}
+
 // compareCurrentCompilerAritfactAgainstRecordsAndSoliditySources checks that
 // the file at each ContractVersion.CompilerArtifactPath hashes to its
 // ContractVersion.Hash, and that the solidity source code recorded in the
@@ -111,11 +126,6 @@ func compareCurrentCompilerAritfactAgainstRecordsAndSoliditySources(
 	contract, err := ExtractContractDetails(apath)
 	require.NoError(t, err, "could not get details for contract %s", versionInfo)
 	hash := contract.VersionHash()
-	thisDir, _ := os.Getwd()
-	rootDir, err := filepath.Abs(filepath.Join(thisDir, "../../.."))
-	if err != nil {
-		rootDir = "<chainlink root directory>"
-	}
 	recompileCommand := fmt.Sprintf("(cd %s; make go-solidity-wrappers)", rootDir)
 	assert.Equal(t, versionInfo.Hash, hash,
 		boxOutput(`compiler artifact %s has changed; please rerun
@@ -164,25 +174,13 @@ func init() {
 	}
 	fmt.Printf("some solidity artifacts missing (%s); rebuilding...",
 		solidityArtifactsMissing)
-	cmd := exec.Command("bash", "-c", compileCommand(nil))
+	cmd := exec.Command("make", "go-solidity-wrappers")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	cmd.Dir = rootDir
 	if err := cmd.Run(); err != nil {
 		panic(err)
 	}
-}
-
-// compileCommand() is a shell command which compiles chainlink's solidity
-// contracts.
-func compileCommand(t *testing.T) string {
-	cmd, err := ioutil.ReadFile("./generation/compile_command.txt")
-	if err != nil {
-		if t != nil {
-			t.Fatal(err)
-		}
-		panic(err)
-	}
-	return strings.Trim(string(cmd), "\n")
 }
 
 // boxOutput formats its arguments as fmt.Printf, and encloses them in a box of
